@@ -84,7 +84,7 @@ def process_files(path):
                 continue
             elif os.path.isfile(ff):
                 if op_mode == MODE_WILD_EXT and not ff.endswith(f'.{op_wild_ext}'):
-                    print(f'[..not *.{op_wild_ext}..]', end='')
+                    print(f'[..skipped: not *.{op_wild_ext}..]', end='')
                     continue
                 change_eol(ff)
             elif os.path.isdir(ff):
