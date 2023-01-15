@@ -8,6 +8,7 @@ import sys
 import os
 import re
 import glob
+import mmap
 
 if len(sys.argv[1:]) != 2:
     sys.exit(__doc__)
@@ -25,7 +26,7 @@ MODE_UNK = -1
 MODE_FILE = 1       # dir/file
 MODE_WILD_EXT = 2   # dir/*.py
 MODE_WILD_ANY = 3   # dir/*
-EXCLUDED_DIRS = ('.*', '.git', '.svn', '.hg', '.mypy_cache')
+EXCLUDED_DIRS = ('.vscode*', '.git', '.svn', '.hg', '.mypy_cache')
 
 LF = b'\n'
 CRLF = b'\r\n'
@@ -61,7 +62,7 @@ def our_mode(filename: str) -> int:
     return op_mode
 
 
-def proceed_next_file(path):
+def process_files(path):
     if op_mode == MODE_FILE:
         change_eol(path)
     else:
@@ -76,12 +77,41 @@ def proceed_next_file(path):
                     continue
                 change_eol(ff)
             elif os.path.isdir(ff):
-                proceed_next_file(os.path.join(path, os.path.basename(ff)))
+                process_files(os.path.join(path, os.path.basename(ff)))
+
+
+def is_dos_file_eol(filename):
+    file_lines = 0
+    dos_eols = 0
+    last_filepos = 0
+    with open(filename, 'r', encoding='utf-8') as f:
+        for file_lines, _ in enumerate(f):
+            pass
+        file_lines += 1
+
+    with open(filename, 'r+b') as f:
+        ff = mmap.mmap(f.fileno(), 0)
+        while (last_filepos := ff.find(CRLF, last_filepos + 1)) != -1:
+            dos_eols += 1
+        ff.close()
+
+    if (dos_eols == file_lines) or (dos_eols == file_lines - 1):
+        return 1                # definetely yes (even if the last line without EOL)
+    elif dos_eols == 0:
+        return 0                # definetely no
+    else:
+        return -1               # mixed file
 
 
 def change_eol(path):
     if is_file_binary(path):
-        print('[..skipped binary..]', end='')
+        print('[..skipped: binary..]', end='')
+    elif op_direction == 'unix2dos' and is_dos_file_eol(path) == 1:
+        print('[..skipped: already DOS EOLs..]', end='')
+    elif op_direction == 'dos2unix' and is_dos_file_eol(path) == 0:
+        print('[..skipped: already non-DOS EOLs..]', end='')
+    elif is_dos_file_eol(path) == -1:
+        print('[..skipped: mixed file..]', end='')
     else:
         print('[..touched..]', end='')
         if op_direction == 'dos2unix':
@@ -101,4 +131,6 @@ def change_eol(path):
 if our_mode(param_file) == MODE_UNK:
     sys.exit('File not found or you should set either wildcard or wildcard.extension')
 
-proceed_next_file(op_root)
+print(f'DIRECTION: {op_direction}')
+
+process_files(op_root)
