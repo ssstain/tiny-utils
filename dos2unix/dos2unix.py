@@ -1,14 +1,16 @@
 # https://github.com/anir/dos2unix-python/blob/master/dos2unix.py
 # https://stackoverflow.com/questions/36422107/how-to-convert-crlf-to-lf-on-a-windows-machine-in-python
+# https://stackoverflow.com/questions/11427138/python-wildcard-search-in-string
 #
 '''
 usage: dos2unix.py <dos2unix|unix2dos> path
 '''
-import sys
-import os
-import re
+import fnmatch
 import glob
 import mmap
+import os
+import re
+import sys
 
 if len(sys.argv[1:]) != 2:
     sys.exit(__doc__)
@@ -26,7 +28,8 @@ MODE_UNK = -1
 MODE_FILE = 1       # dir/file
 MODE_WILD_EXT = 2   # dir/*.py
 MODE_WILD_ANY = 3   # dir/*
-EXCLUDED_DIRS = ('.vscode*', '.git', '.svn', '.hg', '.mypy_cache')
+
+EXCLUSIONS = ('.*', '*.pdf')
 
 LF = b'\n'
 CRLF = b'\r\n'
@@ -41,6 +44,13 @@ def is_file_binary(filename) -> bool:
     textchars = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7f})
     is_binary_string = bool(data_str.translate(None, textchars))
     return is_binary_string
+
+
+def is_file_excluded(filename) -> bool:
+    for ex in (('.', '..') + EXCLUSIONS):
+        if fnmatch.fnmatch(os.path.basename(filename), ex):
+            return True
+    return False
 
 
 def our_mode(filename: str) -> int:
@@ -63,13 +73,14 @@ def our_mode(filename: str) -> int:
 
 
 def process_files(path):
-    if op_mode == MODE_FILE:
+    if op_mode == MODE_FILE and not is_file_excluded(path):
         change_eol(path)
     else:
         for ff in glob.glob(os.path.join(path, '*')):
             print(f'\n{ff}', sep=' ', end='\t')
-            if os.path.basename(ff) in (('.', '..', os.path.basename(__file__)) + EXCLUDED_DIRS):
-                print('[..skipped..]', sep=' ', end='')
+
+            if is_file_excluded(os.path.basename(ff)):
+                print('[..skipped: excluded..]', sep=' ', end='')
                 continue
             elif os.path.isfile(ff):
                 if op_mode == MODE_WILD_EXT and not ff.endswith(f'.{op_wild_ext}'):
@@ -84,10 +95,18 @@ def is_dos_file_eol(filename):
     file_lines = 0
     dos_eols = 0
     last_filepos = 0
-    with open(filename, 'r', encoding='utf-8') as f:
+    try:
+        f = open(filename, 'r', encoding='utf-8')
         for file_lines, _ in enumerate(f):
             pass
-        file_lines += 1
+        f.close()
+    except UnicodeDecodeError:
+        f = open(filename, 'r')
+        for file_lines, _ in enumerate(f):
+            pass
+        f.close()
+
+    file_lines += 1
 
     with open(filename, 'r+b') as f:
         ff = mmap.mmap(f.fileno(), 0)
