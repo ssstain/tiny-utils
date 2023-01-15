@@ -1,5 +1,6 @@
 # https://github.com/anir/dos2unix-python/blob/master/dos2unix.py
 # https://stackoverflow.com/questions/36422107/how-to-convert-crlf-to-lf-on-a-windows-machine-in-python
+# https://stackoverflow.com/questions/11427138/python-wildcard-search-in-string
 #
 '''
 usage: dos2unix.py <dos2unix|unix2dos> path
