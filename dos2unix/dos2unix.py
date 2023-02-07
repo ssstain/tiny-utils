@@ -1,9 +1,16 @@
+# Thanks:
 # https://github.com/anir/dos2unix-python/blob/master/dos2unix.py
 # https://stackoverflow.com/questions/36422107/how-to-convert-crlf-to-lf-on-a-windows-machine-in-python
 # https://stackoverflow.com/questions/11427138/python-wildcard-search-in-string
 #
 '''
 usage: dos2unix.py <dos2unix|unix2dos> path
+dos2unix - convert CRLF to LF
+unix2dos - convert LF to CRLF
+path - absolute (/dir/filename.ext), wildcard (/dir/*), wildcard-with-ext (/dir/*.py)
+
+Note:
+The script skips files that are: binary, mixed-eol, zero-length, already-with-proper-eols
 '''
 import fnmatch
 import glob
@@ -19,7 +26,7 @@ param_file = sys.argv[2]
 op_direction = sys.argv[1]
 
 op_mode = -1                # UNKnown command
-op_wild_ext = '*'           # if mode wildcard extension, then here's and extension
+op_wild_ext = '*'           # if mode is 'wildcard extension', then here's an extension
 op_root = ''                # root dir
 
 # @todo: /dir/, /dir/*, /dir/*.ext
@@ -35,10 +42,18 @@ LF = b'\n'
 CRLF = b'\r\n'
 
 
-def is_file_binary(filename) -> bool:
+def is_file_binary(filename: str) -> bool:
+    """Check if the file is a binary one
+
+    :param filename: pathname
+    :type filename: str
+    :return: TRUE if binary file
+    :rtype: bool
+
+    :see: https://stackoverflow.com/questions/898669/how-can-i-detect-if-a-file-is-binary-non-text-in-python
     '''
-    https://stackoverflow.com/questions/898669/how-can-i-detect-if-a-file-is-binary-non-text-in-python
-    '''
+
+    """
     with open(filename, 'rb') as f:
         data_str: bytes = f.read(1024)
     textchars = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7f})
@@ -46,7 +61,14 @@ def is_file_binary(filename) -> bool:
     return is_binary_string
 
 
-def is_file_excluded(filename) -> bool:
+def is_file_excluded(filename: str) -> bool:
+    """Check excusiions list
+
+    :param filename: pathname
+    :type filename: str
+    :return: TRUE if has to be excluded (skipped)
+    :rtype: bool
+    """
     for ex in (('.', '..') + EXCLUSIONS):
         if fnmatch.fnmatch(os.path.basename(filename), ex):
             return True
@@ -54,6 +76,13 @@ def is_file_excluded(filename) -> bool:
 
 
 def our_mode(filename: str) -> int:
+    """Parse params and setup our mode
+
+    :param filename: pathname
+    :type filename: str
+    :return: MODE_UNK, MODE_FILE, MODE_WILD_EXT, MODE_WILD_ANY
+    :rtype: int
+    """
     global op_mode, op_wild_ext, op_root
     if match := re.match(r'(.*(\\|/)?)\*$', filename):              # dir\*
         op_mode = MODE_WILD_ANY
@@ -72,7 +101,12 @@ def our_mode(filename: str) -> int:
     return op_mode
 
 
-def process_files(path):
+def process_files(path: str):
+    """Main recursive sub to check and mod files along the dir tree
+
+    :param path: pathname
+    :type path: str
+    """
     if op_mode == MODE_FILE and not is_file_excluded(path):
         change_eol(path)
     else:
@@ -91,7 +125,16 @@ def process_files(path):
                 process_files(os.path.join(path, os.path.basename(ff)))
 
 
-def is_dos_file_eol(filename):
+def is_dos_file_eol(filename: str) -> int:
+    """Check if the file is DOS EOLed
+
+    :param filename: pathname
+    :type filename: str
+    :return: 1 - definetely DOS EOLed file
+             0 - definetely non-DOS EOLed file
+             -1 - mixed EOLed file
+    :rtype: int
+    """
     file_lines = 0
     dos_eols = 0
     last_filepos = 0
@@ -122,8 +165,15 @@ def is_dos_file_eol(filename):
         return -1               # mixed file
 
 
-def change_eol(path):
-    if is_file_binary(path):
+def change_eol(path: str):
+    """Change the EOL finally
+
+    :param path: pathaname
+    :type path: str
+    """
+    if os.path.getsize(path) == 0:
+        print('[..skipped: zero-size..]', end='')
+    elif is_file_binary(path):
         print('[..skipped: binary..]', end='')
     elif op_direction == 'unix2dos' and is_dos_file_eol(path) == 1:
         print('[..skipped: already DOS EOLs..]', end='')
